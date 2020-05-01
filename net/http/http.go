@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +43,20 @@ var (
 	defaultClient *http.Client
 )
 
+func getenv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
+}
+
 func init() {
+	lAddrStr := getenv("BIND_ADDRESS", "0.0.0.0")
+	fmt.Printf("Binding to interface with address %s for all HTTP requests...\n", lAddrStr)
+	lAddr, _ := net.ResolveTCPAddr("tcp", lAddrStr+":0")
+	// proxyUrl, _ := url.Parse("http://127.0.0.1:8888")
+
 	jar, _ := cookiejar.New(nil)
 	defaultClient = &http.Client{
 		Timeout: 30 * time.Second,
@@ -51,7 +65,8 @@ func init() {
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 				DualStack: true,
-			}).DialContext,
+				LocalAddr: lAddr}).DialContext,
+			// Proxy:                 http.ProxyURL(proxyUrl),
 			MaxIdleConns:          200,
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   20 * time.Second,
