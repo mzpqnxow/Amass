@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OWASP/Amass/v3/net/dns"
-	"github.com/OWASP/Amass/v3/stringset"
+	"github.com/mzpqnxow/Amass/v3/net/dns"
+	"github.com/mzpqnxow/Amass/v3/stringset"
 )
 
 const (
