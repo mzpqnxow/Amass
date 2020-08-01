@@ -468,8 +468,13 @@ func (g *Gremlin) DeleteEdge(edge *Edge) error {
 	}
 	vertex2 := vertices[0]
 
-	_, err = client.ExecuteQuery(t.V(int(vertex1.ID())).BothE(
-		edge.Predicate).Where(t.OtherV().HasID(int(vertex2.ID()))).Drop())
+	if str, ok := vertex1.ID().(int); ok {
+		_, err = client.ExecuteQuery(t.V(int(vertex1.ID())).BothE(
+			edge.Predicate).Where(t.OtherV().HasID(int(vertex2.ID()))).Drop())
+	} else {
+
+	}
+
 	return err
 }
 
