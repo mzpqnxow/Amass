@@ -468,8 +468,18 @@ func (g *Gremlin) DeleteEdge(edge *Edge) error {
 	}
 	vertex2 := vertices[0]
 
-	_, err = client.ExecuteQuery(t.V(int(vertex1.ID())).BothE(
-		edge.Predicate).Where(t.OtherV().HasID(int(vertex2.ID()))).Drop())
+	// To build with go1.14.6, a type assertion is required to ensure cast to int is possible
+	if _, v1_ok := vertex1.ID().(int); v1_ok {
+		if _, v2_ok := vertex2.ID().(int); v2_ok {
+			_, err = client.ExecuteQuery(t.V(vertex1.ID()).BothE(
+				edge.Predicate).Where(t.OtherV().HasID(vertex2.ID())).Drop())
+		} else {
+			return fmt.Errorf("%s: Unable to convert vertex2 ID to type int", v2_ok)
+		}
+	} else {
+		return fmt.Errorf("%s: Unable to convert vertex1 ID to type int", v1_ok)
+	}
+
 	return err
 }
 
