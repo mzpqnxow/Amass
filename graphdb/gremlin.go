@@ -468,9 +468,17 @@ func (g *Gremlin) DeleteEdge(edge *Edge) error {
 	}
 	vertex2 := vertices[0]
 
-	if str, ok := vertex1.ID().(int); ok {
-		_, err = client.ExecuteQuery(t.V(int(vertex1.ID())).BothE(
-			edge.Predicate).Where(t.OtherV().HasID(int(vertex2.ID()))).Drop())
+	// golang 1.14.6 want's this type assertion
+	// v1 := vertex1.ID()
+	// v2 := vertex2.ID()
+
+	if _, ok := vertex1.ID().(int); ok {
+		if _, ok2 := vertex2.ID().(int); ok2 {
+			_, err = client.ExecuteQuery(t.V(vertex1.ID()).BothE(
+				edge.Predicate).Where(t.OtherV().HasID(vertex2.ID())).Drop())
+		} else {
+
+		}
 	} else {
 
 	}
