@@ -475,9 +475,13 @@ func (g *Gremlin) DeleteEdge(edge *Edge) error {
 	// graphdb/gremlin.go:473:40: cannot convert vertex1.ID() (type interface {}) to type int: need type assertion
 	// graphdb/gremlin.go:474:47: cannot convert vertex2.ID() (type interface {}) to type int: need type assertion
 
-	if _, ok := vertex1.ID().(int) && vertex2.ID().(int); ok {
-		_, err = client.ExecuteQuery(t.V(vertex1.ID()).BothE(
-			edge.Predicate).Where(t.OtherV().HasID(vertex2.ID())).Drop())
+	if _, v1_ok := vertex1.ID().(int); v1_ok {
+		if _, v2_ok := vertex2.ID().(int); v2_ok {
+			_, err = client.ExecuteQuery(t.V(vertex1.ID()).BothE(
+				edge.Predicate).Where(t.OtherV().HasID(vertex2.ID())).Drop())
+		} else {
+
+		}
 	} else {
 
 	}
