@@ -63,6 +63,7 @@ func commandUsage(msg string, cmdFlagSet *flag.FlagSet, errBuf *bytes.Buffer) {
 	g.Fprintln(color.Error, errBuf.String())
 
 	if msg == mainUsageMsg {
+		g.Fprintf(color.Error, "\n==== mzpqnxow - locking-issue fork ====\n\n")
 		g.Fprintf(color.Error, "\nSubcommands: \n\n")
 		g.Fprintf(color.Error, "\t%-11s - Discover targets for enumerations\n", "amass intel")
 		g.Fprintf(color.Error, "\t%-11s - Perform enumerations and network mapping\n", "amass enum")
