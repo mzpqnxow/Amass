@@ -115,6 +115,8 @@ func main() {
 	}
 	if version {
 		fmt.Fprintf(color.Error, "%s\n", format.Version)
+		fmt.Fprintf(color.Error, "587d177b6547e09636093ba7ef37f16207e8b407\n")
+		fmt.Fprintf(color.Error, "+jsonpassive +graphdbpassive +noconcat +profile\n")
 		return
 	}
 
