@@ -43,6 +43,7 @@ import (
 	"github.com/OWASP/Amass/v3/stringfilter"
 	"github.com/OWASP/Amass/v3/systems"
 	"github.com/fatih/color"
+	"github.com/pkg/profile"
 )
 
 const (
@@ -88,6 +89,8 @@ func commandUsage(msg string, cmdFlagSet *flag.FlagSet, errBuf *bytes.Buffer) {
 
 func main() {
 	var version, help1, help2 bool
+	defer profile.Start().Stop()
+
 	mainFlagSet := flag.NewFlagSet("amass", flag.ContinueOnError)
 
 	defaultBuf := new(bytes.Buffer)
