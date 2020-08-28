@@ -202,13 +202,13 @@ func runEnumCommand(clArgs []string) {
 	go saveTextOutput(e, args, txtOutChan, &wg)
 	outChans = append(outChans, txtOutChan)
 
-	if !args.Options.Passive {
-		wg.Add(1)
-		// This goroutine will handle saving the output to the JSON file
-		jsonOutChan := make(chan *requests.Output, 10)
-		go saveJSONOutput(e, args, jsonOutChan, &wg)
-		outChans = append(outChans, jsonOutChan)
-	}
+	// AG: Write JSON even when in passive mode please
+	//     This writes all the same data as active except IP address, which is null
+	wg.Add(1)
+	// This goroutine will handle saving the output to the JSON file
+	jsonOutChan := make(chan *requests.Output, 10)
+	go saveJSONOutput(e, args, jsonOutChan, &wg)
+	outChans = append(outChans, jsonOutChan)
 
 	wg.Add(1)
 	go processOutput(e, outChans, done, &wg)
@@ -225,7 +225,8 @@ func runEnumCommand(clArgs []string) {
 
 	//e.Graph.DumpGraph()
 	// If necessary, handle graph database migration
-	if !cfg.Passive && len(e.Sys.GraphDatabases()) > 0 {
+	// Write database even in passive mode, to cache API requests
+	if len(e.Sys.GraphDatabases()) > 0 {
 		fmt.Fprintf(color.Error, "\n%s\n", green("The enumeration has finished"))
 
 		// Copy the graph of findings into the system graph databases
