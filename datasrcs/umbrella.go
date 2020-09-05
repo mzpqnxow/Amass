@@ -498,11 +498,11 @@ func (u *Umbrella) OnWhoisRequest(ctx context.Context, req *requests.WhoisReques
 func (u *Umbrella) restHeaders() map[string]string {
 	headers := map[string]string{"Content-Type": "application/json"}
 
-	if u.API != nil && u.API.Key != "" {
-		headers["Authorization"] = "Bearer " + u.API.Key
+	if u.creds != nil && u.creds.Key != "" {
+		headers["Authorization"] = "Bearer " + u.creds.Key
 	}
-	return headers
 
+	return headers
 }
 
 func (u *Umbrella) whoisBaseURL() string {
