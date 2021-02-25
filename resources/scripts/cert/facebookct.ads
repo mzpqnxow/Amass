@@ -46,7 +46,7 @@ function vertical(ctx, domain)
     if (resp == nil or resp == "") then
         local err
 
-        resp, err = request({
+        resp, err = request(ctx, {
             url=authurl(c.key, c.secret),
             headers={['Content-Type']="application/json"},
         })
@@ -59,7 +59,7 @@ function vertical(ctx, domain)
             return
         end
     
-        resp, err = request({
+        resp, err = request(ctx, {
             url=queryurl(domain, dec.access_token),
             headers={['Content-Type']="application/json"},
         })
@@ -98,7 +98,11 @@ function sendnames(ctx, content)
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

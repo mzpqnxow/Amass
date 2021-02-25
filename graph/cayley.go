@@ -84,7 +84,7 @@ func NewCayleyGraph(system, path string, options string) *CayleyGraph {
 		return nil
 	}
 
-	graph.InitQuadStore(system, path, opts)
+	_ = graph.InitQuadStore(system, path, opts)
 	store, err := cayley.NewGraph(system, path, opts)
 	if err != nil {
 		return nil
@@ -134,31 +134,14 @@ func (g *CayleyGraph) DumpGraph() string {
 
 	var out string
 	p := cayley.StartPath(g.store).Tag("subject").OutWithTags([]string{"predicate"}).Tag("object")
-	p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
+	err := p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
 		out += fmt.Sprintf("%s -> %s -> %s\n", m["subject"], m["predicate"], m["object"])
 	})
+	if err != nil {
+		return ""
+	}
 
 	return out
-}
-
-func (g *CayleyGraph) optimizedIterate(p *cayley.Path, callback func(value quad.Value)) {
-	pb := p.Iterate(context.TODO())
-
-	pb.Paths(false).EachValue(g.store, callback)
-}
-
-func (g *CayleyGraph) optimizedCount(p *cayley.Path) int {
-	pb := p.Iterate(context.TODO())
-
-	count, _ := pb.Paths(false).Count()
-	return int(count)
-}
-
-func (g *CayleyGraph) optimizedFirst(p *cayley.Path) quad.Value {
-	pb := p.Iterate(context.TODO())
-
-	val, _ := pb.Paths(false).FirstValue(g.store)
-	return val
 }
 
 func isIRI(val quad.Value) bool {

@@ -21,9 +21,8 @@ import (
 	"sync"
 
 	_ "github.com/OWASP/Amass/v3/config/statik" // The content being embedded into the binary
-	amasshttp "github.com/OWASP/Amass/v3/net/http"
-	"github.com/OWASP/Amass/v3/stringset"
 	"github.com/OWASP/Amass/v3/wordlist"
+	"github.com/caffix/stringset"
 	"github.com/go-ini/ini"
 	"github.com/google/uuid"
 	"github.com/rakyll/statik/fs"
@@ -135,9 +134,6 @@ type Config struct {
 	Resolvers           []string
 	MonitorResolverRate bool
 
-	// Enumeration Timeout
-	Timeout int
-
 	// Option for verbose logging and output
 	Verbose bool
 
@@ -156,10 +152,8 @@ func NewConfig() *Config {
 	c := &Config{
 		UUID:                uuid.New(),
 		Log:                 log.New(ioutil.Discard, "", 0),
-		Ports:               []int{443},
-		MaxDNSQueries:       defaultConcurrentDNSQueries,
+		Ports:               []int{80, 443},
 		MinForRecursive:     1,
-		Resolvers:           defaultPublicResolvers,
 		MonitorResolverRate: true,
 		LocalDatabase:       true,
 		// The following is enum-only, but intel will just ignore them anyway
@@ -171,8 +165,10 @@ func NewConfig() *Config {
 		MinForWordFlip: 2,
 		EditDistance:   1,
 		Recursive:      true,
+		MinimumTTL:     1440,
 	}
 
+	c.calcDNSQueriesMax()
 	return c
 }
 
@@ -270,6 +266,7 @@ func AcquireConfig(dir, file string, config *Config) error {
 			return nil
 		}
 	}
+	// Attempt to obtain the configuration file from the output directory
 	if dir = OutputDirectory(dir); dir != "" {
 		if finfo, err := os.Stat(dir); !os.IsNotExist(err) && finfo.IsDir() {
 			file := filepath.Join(dir, "config.ini")
@@ -332,14 +329,6 @@ func GetListFromFile(path string) ([]string, error) {
 
 	s, err := getWordList(reader)
 	return s, err
-}
-
-func getWordlistByURL(url string) ([]string, error) {
-	page, err := amasshttp.RequestWebPage(url, nil, nil, "", "")
-	if err != nil {
-		return nil, fmt.Errorf("Failed to obtain the wordlist at %s: %v", url, err)
-	}
-	return getWordList(strings.NewReader(page))
 }
 
 func getWordlistByFS(path string) ([]string, error) {

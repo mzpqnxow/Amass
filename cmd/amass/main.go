@@ -4,7 +4,7 @@
 
 // In-depth Attack Surface Mapping and Asset Discovery
 //  +----------------------------------------------------------------------------+
-//  | ░░░░░░░░░░░░░░░░░░░░░░░░░░  OWASP Amass  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ |
+//  | ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  OWASP Amass  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ |
 //  +----------------------------------------------------------------------------+
 //  |      .+++:.            :                             .+++.                 |
 //  |    +W@@@@@@8        &+W@#               o8W8:      +W@@@@@@#.   oW@@@W#+   |
@@ -36,13 +36,14 @@ import (
 
 	"github.com/OWASP/Amass/v3/config"
 	"github.com/OWASP/Amass/v3/datasrcs"
-	"github.com/OWASP/Amass/v3/eventbus"
 	"github.com/OWASP/Amass/v3/format"
 	"github.com/OWASP/Amass/v3/graph"
 	amassnet "github.com/OWASP/Amass/v3/net"
 	"github.com/OWASP/Amass/v3/requests"
 	"github.com/OWASP/Amass/v3/stringfilter"
 	"github.com/OWASP/Amass/v3/systems"
+	"github.com/caffix/eventbus"
+	"github.com/caffix/service"
 	"github.com/fatih/color"
 )
 
@@ -102,7 +103,6 @@ func main() {
 		commandUsage(mainUsageMsg, mainFlagSet, defaultBuf)
 		return
 	}
-
 	if err := mainFlagSet.Parse(os.Args[1:]); err != nil {
 		r.Fprintf(color.Error, "%v\n", err)
 		os.Exit(1)
@@ -137,17 +137,25 @@ func main() {
 
 // GetAllSourceInfo returns the output for the 'list' flag.
 func GetAllSourceInfo(cfg *config.Config) []string {
-	var names []string
-
 	if cfg == nil {
 		cfg = config.NewConfig()
 	}
 
 	sys, err := systems.NewLocalSystem(cfg)
 	if err != nil {
-		return names
+		return []string{}
 	}
-	sys.SetDataSources(datasrcs.GetAllSources(sys, false))
+	defer sys.Shutdown()
+
+	srcs := datasrcs.SelectedDataSources(cfg, datasrcs.GetAllSources(sys))
+	sys.SetDataSources(srcs)
+
+	return DataSourceInfo(srcs, sys)
+}
+
+// DataSourceInfo acquires the information for data sources used by the provided System.
+func DataSourceInfo(all []service.Service, sys systems.System) []string {
+	var names []string
 
 	names = append(names, fmt.Sprintf("%-35s%-35s%s", blue("Data Source"), blue("| Type"), blue("| Available")))
 	var line string
@@ -156,15 +164,21 @@ func GetAllSourceInfo(cfg *config.Config) []string {
 	}
 	names = append(names, line)
 
-	for _, src := range sys.DataSources() {
+	available := sys.DataSources()
+	for _, src := range all {
 		var avail string
-		if src.CheckConfig() == nil {
-			avail = "*"
+
+		for _, a := range available {
+			if src.String() == a.String() {
+				avail = "*"
+				break
+			}
 		}
-		names = append(names, fmt.Sprintf("%-35s  %-35s  %s", green(src.String()), yellow(src.Type()), yellow(avail)))
+
+		names = append(names, fmt.Sprintf("%-35s  %-35s  %s",
+			green(src.String()), yellow(src.Description()), yellow(avail)))
 	}
 
-	sys.Shutdown()
 	return names
 }
 
@@ -186,7 +200,7 @@ func generateCategoryMap(sys systems.System) map[string][]string {
 	catToSources := make(map[string][]string)
 
 	for _, src := range sys.DataSources() {
-		t := src.Type()
+		t := src.Description()
 
 		catToSources[t] = append(catToSources[t], src.String())
 	}
@@ -315,9 +329,8 @@ func memGraphForScope(domains []string, from *graph.Graph) (*graph.Graph, error)
 	return db, nil
 }
 
-func getEventOutput(uuids []string, asninfo bool, db *graph.Graph) []*requests.Output {
+func getEventOutput(uuids []string, asninfo bool, db *graph.Graph, cache *amassnet.ASNCache) []*requests.Output {
 	var output []*requests.Output
-	cache := amassnet.NewASNCache()
 	filter := stringfilter.NewStringFilter()
 
 	for i := len(uuids) - 1; i >= 0; i-- {
@@ -344,17 +357,20 @@ func domainNameInScope(name string, scope []string) bool {
 }
 
 func healASInfo(uuids []string, db *graph.Graph) bool {
-	cache := amassnet.NewASNCache()
-	db.ASNCacheFill(cache)
-
 	cfg := config.NewConfig()
 	cfg.LocalDatabase = false
+
 	sys, err := systems.NewLocalSystem(cfg)
 	if err != nil {
 		return false
 	}
-	sys.SetDataSources(datasrcs.GetAllSources(sys, true))
+	sys.SetDataSources(datasrcs.GetAllSources(sys))
 	defer sys.Shutdown()
+
+	cache := sys.Cache()
+	for _, g := range sys.GraphDatabases() {
+		g.ASNCacheFill(cache)
+	}
 
 	bus := eventbus.NewEventBus()
 	bus.Subscribe(requests.NewASNTopic, cache.Update)
@@ -372,10 +388,13 @@ func healASInfo(uuids []string, db *graph.Graph) bool {
 				}
 
 				for _, src := range sys.DataSources() {
-					src.ASNRequest(ctx, &requests.ASNRequest{Address: a.Address.String()})
+					src.Request(ctx, &requests.ASNRequest{Address: a.Address.String()})
 				}
 
-				for cache.AddrSearch(a.Address.String()) == nil {
+				for i := 0; i < 30; i++ {
+					if cache.AddrSearch(a.Address.String()) != nil {
+						break
+					}
 					time.Sleep(time.Second)
 				}
 
@@ -416,4 +435,24 @@ func assignNetInterface(iface *net.Interface) error {
 
 	amassnet.LocalAddr = best
 	return nil
+}
+
+func cacheWithData() *amassnet.ASNCache {
+	ranges, err := config.GetIP2ASNData()
+	if err != nil {
+		return nil
+	}
+
+	cache := amassnet.NewASNCache()
+	for _, r := range ranges {
+		cache.Update(&requests.ASNRequest{
+			Address:     r.FirstIP.String(),
+			ASN:         r.ASN,
+			CC:          r.CC,
+			Prefix:      amassnet.Range2CIDR(r.FirstIP, r.LastIP).String(),
+			Description: r.Description,
+		})
+	}
+
+	return cache
 }

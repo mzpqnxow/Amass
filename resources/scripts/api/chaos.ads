@@ -24,12 +24,6 @@ function check()
 end
 
 function vertical(ctx, domain)
-    if check() then
-        apiquery(ctx, domain)
-    end
-end
-
-function apiquery(ctx, domain)
     local c
     local cfg = datasrc_config()
     if cfg ~= nil then
@@ -37,7 +31,6 @@ function apiquery(ctx, domain)
     end
 
     local resp
-    local vurl = apiurl(domain)
     -- Check if the response data is in the graph database
     if (cfg.ttl ~= nil and cfg.ttl > 0) then
         resp = obtain_response(domain, cfg.ttl)
@@ -46,8 +39,8 @@ function apiquery(ctx, domain)
     if (resp == nil or resp == "") then
         local err
 
-        resp, err = request({
-            url=vurl,
+        resp, err = request(ctx, {
+            ['url']=apiurl(domain),
             headers={['Authorization']=c["key"]},
         })
         if (err ~= nil and err ~= "") then

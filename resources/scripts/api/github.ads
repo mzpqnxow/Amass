@@ -45,7 +45,7 @@ function vertical(ctx, domain)
         if (resp == nil or resp == "") then
             local err
 
-            resp, err = request({
+            resp, err = request(ctx, {
                 url=vurl,
                 headers={
                     ['Authorization']="token " .. c.key,
@@ -70,13 +70,12 @@ function vertical(ctx, domain)
             search_item(ctx, item)
         end
 
-        active(ctx)
         checkratelimit()
     end
 end
 
 function search_item(ctx, item)
-    local info, err = request({
+    local info, err = request(ctx, {
         url=item.url,
         headers={['Content-Type']="application/json"},
     })
@@ -89,7 +88,7 @@ function search_item(ctx, item)
         return
     end
 
-    local content, err = request({url=data['download_url']})
+    local content, err = request(ctx, {url=data['download_url']})
     if err == nil then
         sendnames(ctx, content)
     end
@@ -105,7 +104,11 @@ function sendnames(ctx, content)
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

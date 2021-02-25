@@ -44,7 +44,7 @@ function vertical(ctx, domain)
     if (resp == nil or resp == "") then
         local err
 
-        resp, err = request({
+        resp, err = request(ctx, {
             url=vurl,
             headers={
                 APIKEY=c.key,
@@ -76,12 +76,16 @@ end
 
 function sendnames(ctx, content)
     local names = find(content, subdomainre)
-    if names == nil then
+    if (names == nil) then
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if (found[v] == nil) then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end
 
@@ -106,7 +110,7 @@ function horizontal(ctx, domain)
     if (resp == nil or resp == "") then
         local err
 
-        resp, err = request({
+        resp, err = request(ctx, {
             url=hurl,
             headers={
                 APIKEY=c.key,
@@ -127,15 +131,10 @@ function horizontal(ctx, domain)
         return
     end
 
-    assoc = {}
     for i, r in pairs(j.records) do
-        if r.hostname ~= "" then
-            table.insert(assoc, r.hostname)
+        if (r.hostname ~= "") then
+            associated(ctx, domain, r.hostname)
         end
-    end
-
-    for i, a in pairs(assoc) do
-        associated(ctx, domain, a)
     end
 end
 

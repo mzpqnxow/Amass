@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OWASP/Amass/v3/stringset"
+	"github.com/caffix/stringset"
 	"github.com/cayleygraph/cayley"
 	"github.com/cayleygraph/quad"
 )
@@ -33,7 +33,7 @@ func (g *CayleyGraph) InsertProperty(node Node, predicate, value string) error {
 	if !g.isBolt || !g.noSync {
 		// Check if the property has already been inserted
 		p := cayley.StartPath(g.store, quad.IRI(nstr)).Has(quad.IRI(predicate), quad.String(value))
-		if first := g.optimizedFirst(p); first != nil {
+		if first, err := p.Iterate(context.Background()).FirstValue(nil); err == nil && first != nil {
 			return nil
 		}
 	}
@@ -70,7 +70,7 @@ func (g *CayleyGraph) ReadProperties(node Node, predicates ...string) ([]*Proper
 	}
 	p = p.Tag("object")
 
-	p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
+	err := p.Iterate(context.Background()).TagValues(nil, func(m map[string]quad.Value) {
 		// Check if this is actually a node and not a property
 		if !isIRI(m["object"]) {
 			properties = append(properties, &Property{
@@ -79,10 +79,9 @@ func (g *CayleyGraph) ReadProperties(node Node, predicates ...string) ([]*Proper
 			})
 		}
 	})
-
 	// Given the Amass data model, valid nodes should always have at least
 	// one property, and for that reason, it doesn't need to be checked here
-	return properties, nil
+	return properties, err
 }
 
 // CountProperties implements the GraphDatabase interface.
@@ -112,12 +111,12 @@ func (g *CayleyGraph) CountProperties(node Node, predicates ...string) (int, err
 	}
 
 	var count int
-	g.optimizedIterate(p, func(value quad.Value) {
+	err := p.Iterate(context.Background()).EachValue(nil, func(value quad.Value) {
 		if !isIRI(value) {
 			count++
 		}
 	})
-	return count, nil
+	return count, err
 }
 
 // DeleteProperty implements the GraphDatabase interface.
@@ -133,7 +132,7 @@ func (g *CayleyGraph) DeleteProperty(node Node, predicate, value string) error {
 	if !g.isBolt || !g.noSync {
 		// Check if the property exists on the node
 		p := cayley.StartPath(g.store, quad.IRI(nstr)).Has(quad.IRI(predicate), quad.String(value))
-		if first := g.optimizedFirst(p); first == nil {
+		if first, err := p.Iterate(context.Background()).FirstValue(nil); err != nil || first == nil {
 			return fmt.Errorf("%s: DeleteProperty: The property does not exist on node: %s", g.String(), nstr)
 		}
 	}

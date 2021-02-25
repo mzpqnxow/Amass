@@ -33,7 +33,7 @@ const Banner = `
 
 const (
 	// Version is used to display the current version of Amass.
-	Version = "v3.10.3"
+	Version = "v3.11.5"
 
 	// Author is used to display the Amass Project Team.
 	Author = "OWASP Amass Project - @owaspamass"
@@ -62,7 +62,7 @@ func UpdateSummaryData(output *requests.Output, tags map[string]int, asns map[in
 	tags[output.Tag]++
 
 	for _, addr := range output.Addresses {
-		if addr.Netblock == nil {
+		if addr.CIDRStr == "" {
 			continue
 		}
 
@@ -75,7 +75,7 @@ func UpdateSummaryData(output *requests.Output, tags map[string]int, asns map[in
 			data = asns[addr.ASN]
 		}
 		// Increment how many IPs were in this netblock
-		data.Netblocks[addr.Netblock.String()]++
+		data.Netblocks[addr.CIDRStr]++
 	}
 }
 

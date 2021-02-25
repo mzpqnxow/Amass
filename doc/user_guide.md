@@ -84,7 +84,7 @@ The intel subcommand can help you discover additional root domain names associat
 | -noresolvscore | Disable resolver reliability scoring | amass intel -cidr 104.154.0.0/15 -noresolvscore |
 | -o | Path to the text output file | amass intel -o out.txt -whois -d example.com |
 | -org | Search string provided against AS description information | amass intel -org Facebook |
-| -p | Ports separated by commas (default: 443) | amass intel -cidr 104.154.0.0/15 -p 443,8080 |
+| -p | Ports separated by commas (default: 80, 443) | amass intel -cidr 104.154.0.0/15 -p 443,8080 |
 | -r | IP addresses of preferred DNS resolvers (can be used multiple times) | amass intel -r 8.8.8.8,1.1.1.1 -whois -d example.com |
 | -rf | Path to a file providing preferred DNS resolvers | amass intel -rf data/resolvers.txt -whois -d example.com |
 | -src | Print data sources for the discovered names | amass intel -src -whois -d example.com |
@@ -188,9 +188,15 @@ Performs viewing and manipulation of the graph database. This subcommand only le
 | -ip | Show the IP addresses for discovered names | amass db -show -ip -d example.com |
 | -ipv4 | Show the IPv4 addresses for discovered names | amass db -show -ipv4 -d example.com |
 | -ipv6 | Show the IPv6 addresses for discovered names | amass db -show -ipv6 -d example.com |
+| -json | Path to the JSON output file | amass db -names -silent -json out.json -d example.com |
 | -list | Print enumerations in the database and filter on domains specified | amass db -list |
+| -names | Print just discovered names | amass db -names -d example.com |
+| -nocolor | Disable colorized output | amass db -names -nocolor -d example.com |
+| -o | Path to the text output file | amass db -names -o out.txt -d example.com |
 | -show | Print the results for the enumeration index + domains provided | amass db -show |
+| -silent | Disable all output during execution | amass db -names -silent -json out.json -d example.com |
 | -src | Print data sources for the discovered names | amass db -show -src -d example.com |
+| -summary | Print just ASN table summary | amass db -summary -d example.com |
 
 ## The Output Directory
 

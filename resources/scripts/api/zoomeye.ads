@@ -17,7 +17,8 @@ function check()
         c = cfg.credentials
     end
 
-    if (c ~= nil and c.key ~= nil and c.key ~= "") then
+    if (c ~= nil and c.username ~= nil and 
+        c.password ~= nil and c.username ~= "" and c.password ~= "") then
         return true
     end
     return false
@@ -30,7 +31,13 @@ function vertical(ctx, domain)
         c = cfg.credentials
     end
 
-    if (c == nil or c.key == nil or c.key == "") then
+    if (c == nil or c.username == nil or 
+        c.username == "" or c.password == nil or c.password == "") then
+        return
+    end
+
+    local token = bearer_token(ctx, c.username, c.password)
+    if token == "" then
         return
     end
 
@@ -44,14 +51,15 @@ function vertical(ctx, domain)
     if (resp == nil or resp == "") then
         local err
 
-        resp, err = request({
+        resp, err = request(ctx, {
             url=vurl,
             headers={
                 ['Content-Type']="application/json",
-                ['Authorization']="JWT " .. c.key,
+                ['Authorization']="JWT " .. token,
             },
         })
         if (err ~= nil and err ~= "") then
+            log(ctx, err .. ": " .. resp)
             return
         end
 
@@ -78,13 +86,44 @@ function buildurl(domain)
     return "https://api.zoomeye.org/host/search?query=hostname:*." .. domain
 end
 
+function bearer_token(ctx, username, password)
+    local body, err = json.encode({
+        username=username, 
+        password=password,
+    })
+    if (err ~= nil and err ~= "") then
+        return ""
+    end
+
+    resp, err = request(ctx, {
+        method="POST",
+        data=body,
+        url="https://api.zoomeye.org/user/login",
+        headers={['Content-Type']="application/json"},
+    })
+    if (err ~= nil and err ~= "") then
+        return ""
+    end
+
+    local d = json.decode(resp)
+    if (d == nil or d.access_token == nil or d.access_token == "") then
+        return ""
+    end
+
+    return d.access_token
+end
+
 function sendnames(ctx, content)
     local names = find(content, subdomainre)
     if names == nil then
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

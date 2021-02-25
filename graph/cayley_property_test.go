@@ -4,9 +4,10 @@
 package graph
 
 import (
+	"context"
 	"testing"
 
-	"github.com/OWASP/Amass/v3/stringset"
+	"github.com/caffix/stringset"
 	"github.com/cayleygraph/cayley"
 	"github.com/cayleygraph/quad"
 )
@@ -25,7 +26,9 @@ func TestInsertProperty(t *testing.T) {
 	vBob := quad.IRI("Bob")
 	vType := quad.IRI("type")
 	// setup the initial data in the graph
-	g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the bob quad")
+	}
 
 	if err := g.InsertProperty("Bob", "", "coffee"); err == nil {
 		t.Errorf("InsertProperty returned no error when provided an empty predicate argument")
@@ -36,7 +39,7 @@ func TestInsertProperty(t *testing.T) {
 	}
 
 	p := cayley.StartPath(g.store, vBob).Has(quad.IRI("likes"), quad.String("coffee"))
-	if first := g.optimizedFirst(p); first == nil {
+	if first, err := p.Iterate(context.Background()).FirstValue(nil); err != nil || first == nil {
 		t.Errorf("InsertProperty failed to enter the property for the node")
 	}
 
@@ -60,7 +63,9 @@ func TestReadProperties(t *testing.T) {
 	vBob := quad.IRI("Bob")
 	vType := quad.IRI("type")
 	// setup the initial data in the graph
-	g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the bob quad")
+	}
 
 	properties, err := g.ReadProperties("Bob")
 	if err != nil {
@@ -79,8 +84,12 @@ func TestReadProperties(t *testing.T) {
 	}
 
 	vLikes := quad.IRI("likes")
-	g.store.AddQuad(quad.Make(vBob, vLikes, "coffee", nil))
-	g.store.AddQuad(quad.Make(vBob, vLikes, "Go", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vLikes, "coffee", nil)); err != nil {
+		t.Errorf("Failed to add the bob likes coffee quad")
+	}
+	if err := g.store.AddQuad(quad.Make(vBob, vLikes, "Go", nil)); err != nil {
+		t.Errorf("Failed to add the bob likes Go quad")
+	}
 
 	properties, err = g.ReadProperties("Bob")
 	if err != nil {
@@ -129,7 +138,9 @@ func TestCountProperties(t *testing.T) {
 	vBob := quad.IRI("Bob")
 	vType := quad.IRI("type")
 	// setup the initial data in the graph
-	g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the bob quad")
+	}
 
 	if count, err := g.CountProperties("Bob"); err != nil {
 		t.Errorf("CountProperties returned an error when provided a valid node")
@@ -138,8 +149,12 @@ func TestCountProperties(t *testing.T) {
 	}
 
 	vLikes := quad.IRI("likes")
-	g.store.AddQuad(quad.Make(vBob, vLikes, "coffee", nil))
-	g.store.AddQuad(quad.Make(vBob, vLikes, "Go", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vLikes, "coffee", nil)); err != nil {
+		t.Errorf("Failed to add the bob likes coffee quad")
+	}
+	if err := g.store.AddQuad(quad.Make(vBob, vLikes, "Go", nil)); err != nil {
+		t.Errorf("Failed to add the bob likes Go quad")
+	}
 
 	if count, err := g.CountProperties("Bob"); err != nil {
 		t.Errorf("CountProperties returned an error when provided a valid node with additional properties")
@@ -169,15 +184,19 @@ func TestDeleteProperty(t *testing.T) {
 	vType := quad.IRI("type")
 	vLikes := quad.IRI("likes")
 	// setup the initial data in the graph
-	g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
-	g.store.AddQuad(quad.Make(vBob, vLikes, "coffee", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the bob quad")
+	}
+	if err := g.store.AddQuad(quad.Make(vBob, vLikes, "coffee", nil)); err != nil {
+		t.Errorf("Failed to add the bob likes coffee quad")
+	}
 
 	if err := g.DeleteProperty("Bob", "likes", "coffee"); err != nil {
 		t.Errorf("DeleteProperty returned an error when provided a valid node and property arguments")
 	}
 
 	p := cayley.StartPath(g.store, vBob).Has(quad.IRI("likes"), quad.String("coffee"))
-	if first := g.optimizedFirst(p); first != nil {
+	if first, err := p.Iterate(context.Background()).FirstValue(nil); err == nil && first != nil {
 		t.Errorf("DeleteProperty failed to delete the property from the node")
 	}
 

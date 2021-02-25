@@ -47,7 +47,7 @@ function apiquery(ctx, cfg, domain)
                 return
             end
     
-            resp, err = request({
+            resp, err = request(ctx, {
                 method="POST",
                 data=body,
                 url=apiurl(),
@@ -80,7 +80,6 @@ function apiquery(ctx, cfg, domain)
         end
 
         checkratelimit()
-        active(ctx)
         p = p + 1
     end
 end
@@ -99,7 +98,11 @@ function sendnames(ctx, content)
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

@@ -1,4 +1,4 @@
--- Copyright 2017 Jeff Foley. All rights reserved.
+-- Copyright 2017-2021 Jeff Foley. All rights reserved.
 -- Use of this source code is governed by Apache 2 LICENSE that can be found in the LICENSE file.
 
 local url = require("url")
@@ -12,7 +12,13 @@ function start()
 end
 
 function vertical(ctx, domain)
-    local page, err = request({['url']=buildurl(domain)})
+    getnames(ctx, newapiurl(domain))
+    checkratelimit()
+    getnames(ctx, oldapiurl(domain))
+end
+
+function getnames(ctx, vurl)
+    local page, err = request(ctx, {['url']=vurl})
     if (err ~= nil and err ~= "") then
         return
     end
@@ -29,7 +35,7 @@ function vertical(ctx, domain)
     end
 end
 
-function buildurl(domain)
+function newapiurl(domain)
     local params = {
         ['domain']=domain,
         ['include_subdomains']="true",
@@ -40,13 +46,21 @@ function buildurl(domain)
     return "https://api.certspotter.com/v1/issuances?" .. url.build_query_string(params)
 end
 
+function oldapiurl(domain)
+    return "https://certspotter.com/api/v0/certs?domain=" .. domain
+end
+
 function sendnames(ctx, content)
     local names = find(content, subdomainre)
     if names == nil then
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

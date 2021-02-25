@@ -4,6 +4,7 @@
 package graph
 
 import (
+	"context"
 	"testing"
 
 	"github.com/cayleygraph/cayley"
@@ -46,7 +47,7 @@ func TestInsertEdge(t *testing.T) {
 	}
 	for i, test := range testArgs {
 		if i == len(testArgs)-1 {
-			g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+			_ = g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
 		}
 		err := g.InsertEdge(&Edge{
 			Predicate: test.Predicate,
@@ -58,7 +59,9 @@ func TestInsertEdge(t *testing.T) {
 		}
 	}
 
-	g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the quad: %v", err)
+	}
 
 	err := g.InsertEdge(&Edge{
 		Predicate: "knows",
@@ -71,7 +74,7 @@ func TestInsertEdge(t *testing.T) {
 
 	// Check if the edge was successfully inserted
 	p := cayley.StartPath(g.store, vBob).Out(quad.IRI("knows")).Is(vAlice)
-	if first := g.optimizedFirst(p); first == nil {
+	if first, err := p.Iterate(context.Background()).FirstValue(nil); err != nil || first == nil {
 		t.Errorf("InsertEdge failed to insert the quad for the edge")
 	}
 
@@ -98,15 +101,21 @@ func TestReadEdges(t *testing.T) {
 	vBob := quad.IRI("Bob")
 	vType := quad.IRI("type")
 	// setup the initial data in the graph
-	g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the Bob quad: %v", err)
+	}
 
 	if _, err := g.ReadEdges("Bob"); err == nil {
 		t.Errorf("ReadEdges returned no error when the node has no edges")
 	}
 
 	vAlice := quad.IRI("Alice")
-	g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil))
-	g.store.AddQuad(quad.Make(vBob, quad.IRI("knows"), vAlice, nil))
+	if err := g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the Alice quad: %v", err)
+	}
+	if err := g.store.AddQuad(quad.Make(vBob, quad.IRI("knows"), vAlice, nil)); err != nil {
+		t.Errorf("Failed to add the Bob knows Alice quad: %v", err)
+	}
 
 	if edges, err := g.ReadEdges("Bob"); err != nil {
 		t.Errorf("ReadEdges returned an error when the node has edges: %v", err)
@@ -114,7 +123,9 @@ func TestReadEdges(t *testing.T) {
 		t.Errorf("ReadEdges returned the wrong edges: %v", edges)
 	}
 
-	g.store.AddQuad(quad.Make(vAlice, quad.IRI("knows"), vBob, nil))
+	if err := g.store.AddQuad(quad.Make(vAlice, quad.IRI("knows"), vBob, nil)); err != nil {
+		t.Errorf("Failed to add the Alice knows Bob quad: %v", err)
+	}
 
 	if edges, err := g.ReadEdges("Bob", "knows"); err != nil {
 		t.Errorf("ReadEdges returned an error when the node has multiple edges: %v", err)
@@ -125,8 +136,9 @@ func TestReadEdges(t *testing.T) {
 	if _, err := g.ReadEdges("Bob", "likes"); err == nil {
 		t.Errorf("ReadEdges returned no error when the node does not have edges with matching predicates: %v", err)
 	}
-
-	g.store.AddQuad(quad.Make(vBob, quad.IRI("likes"), vAlice, nil))
+	if err := g.store.AddQuad(quad.Make(vBob, quad.IRI("likes"), vAlice, nil)); err != nil {
+		t.Errorf("Failed to add the Bob likes Alice quad: %v", err)
+	}
 
 	if edges, err := g.ReadEdges("Bob", "likes"); err != nil {
 		t.Errorf("ReadEdges returned an error when the node has edges with matching predicates: %v", err)
@@ -157,7 +169,9 @@ func TestCountEdges(t *testing.T) {
 	vBob := quad.IRI("Bob")
 	vType := quad.IRI("type")
 	// setup the initial data in the graph
-	g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the Bob quad: %v", err)
+	}
 
 	if count, err := g.CountEdges("Bob"); err != nil {
 		t.Errorf("CountEdges returned an error when the node has no edges: %v", err)
@@ -166,8 +180,12 @@ func TestCountEdges(t *testing.T) {
 	}
 
 	vAlice := quad.IRI("Alice")
-	g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil))
-	g.store.AddQuad(quad.Make(vBob, quad.IRI("knows"), vAlice, nil))
+	if err := g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the Alice quad: %v", err)
+	}
+	if err := g.store.AddQuad(quad.Make(vBob, quad.IRI("knows"), vAlice, nil)); err != nil {
+		t.Errorf("Failed to add the Bob knows Alice quad: %v", err)
+	}
 
 	if count, err := g.CountEdges("Bob"); err != nil {
 		t.Errorf("CountEdges returned an error when the node has edges: %v", err)
@@ -175,7 +193,9 @@ func TestCountEdges(t *testing.T) {
 		t.Errorf("CountEdges returned the wrong count value: %d", count)
 	}
 
-	g.store.AddQuad(quad.Make(vAlice, quad.IRI("knows"), vBob, nil))
+	if err := g.store.AddQuad(quad.Make(vAlice, quad.IRI("knows"), vBob, nil)); err != nil {
+		t.Errorf("Failed to add the Alice knows Bob quad: %v", err)
+	}
 
 	if count, err := g.CountEdges("Bob"); err != nil {
 		t.Errorf("CountEdges returned an error when the node has multiple edges: %v", err)
@@ -189,7 +209,9 @@ func TestCountEdges(t *testing.T) {
 		t.Errorf("CountEdges returned the wrong count value when the node does not have edges with matching predicates: %d", count)
 	}
 
-	g.store.AddQuad(quad.Make(vBob, quad.IRI("likes"), vAlice, nil))
+	if err := g.store.AddQuad(quad.Make(vBob, quad.IRI("likes"), vAlice, nil)); err != nil {
+		t.Errorf("Failed to add the Bob likes Alice quad: %v", err)
+	}
 
 	if count, err := g.CountEdges("Bob", "likes"); err != nil {
 		t.Errorf("CountEdges returned an error when the node has edges with matching predicates: %v", err)
@@ -233,7 +255,9 @@ func TestDeleteEdge(t *testing.T) {
 	}
 	for i, test := range testArgs {
 		if i == len(testArgs)-1 {
-			g.store.AddQuad(quad.Make(vBob, vType, "Person", nil))
+			if err := g.store.AddQuad(quad.Make(vBob, vType, "Person", nil)); err != nil {
+				t.Errorf("Failed to add the Bob quad: %v", err)
+			}
 		}
 		err := g.DeleteEdge(&Edge{
 			Predicate: test.Predicate,
@@ -246,7 +270,9 @@ func TestDeleteEdge(t *testing.T) {
 	}
 
 	vAlice := quad.IRI(alice)
-	g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil))
+	if err := g.store.AddQuad(quad.Make(vAlice, vType, "Person", nil)); err != nil {
+		t.Errorf("Failed to add the Alice quad: %v", err)
+	}
 
 	err := g.DeleteEdge(&Edge{
 		Predicate: "knows",
@@ -257,7 +283,9 @@ func TestDeleteEdge(t *testing.T) {
 		t.Errorf("DeleteEdge returned no error when provided an edge that does not exist")
 	}
 
-	g.store.AddQuad(quad.Make(vBob, quad.IRI("knows"), vAlice, nil))
+	if err := g.store.AddQuad(quad.Make(vBob, quad.IRI("knows"), vAlice, nil)); err != nil {
+		t.Errorf("Failed to add the Bob knows Alice quad: %v", err)
+	}
 
 	err = g.DeleteEdge(&Edge{
 		Predicate: "knows",
@@ -270,7 +298,7 @@ func TestDeleteEdge(t *testing.T) {
 
 	// Check if the edge was actually removed
 	p := cayley.StartPath(g.store, vBob).Out(quad.IRI("knows")).Is(vAlice)
-	if first := g.optimizedFirst(p); first != nil {
+	if first, err := p.Iterate(context.Background()).FirstValue(nil); err == nil && first != nil {
 		t.Errorf("DeleteEdge failed to remove the edge")
 	}
 }

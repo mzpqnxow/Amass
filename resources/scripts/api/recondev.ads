@@ -44,11 +44,12 @@ function vertical(ctx, domain)
     if (resp == nil or resp == "") then
         local err
 
-        resp, err = request({
+        resp, err = request(ctx, {
             url=u,
             headers={['Content-Type']="application/json"},
         })
         if (err ~= nil and err ~= "") then
+            log(ctx, err .. ": " .. resp)
             return
         end
 
@@ -71,10 +72,8 @@ function vertical(ctx, domain)
         end
 
         local addrs = set["rawIp"]
-        if addrs ~= nil and #addrs > 0 then
-            for j, addr in pairs(addrs) do
-                newaddr(ctx, domain, addr)
-            end
+        if addr ~= nil then
+            newaddr(ctx, domain, addr)
         end
     end
 end
@@ -89,7 +88,11 @@ function sendnames(ctx, content)
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

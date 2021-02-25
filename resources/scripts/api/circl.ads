@@ -31,15 +31,16 @@ function vertical(ctx, domain)
         c = cfg.credentials
     end
 
-    if (c == nil or c.username == "" or c.password == "") then
+    if (c == nil or c.username == nil or 
+        c.username == "" or c.password == nil or c.password == "") then
         return
     end
 
-    local page, err = request({
+    local page, err = request(ctx, {
         url=buildurl(domain),
         headers={['Content-Type']="application/json"},
-        id=api['username'],
-        pass=api['password'],
+        id=c['username'],
+        pass=c['password'],
     })
     if (err ~= nil and err ~= "") then
         return
@@ -70,7 +71,11 @@ function sendnames(ctx, content)
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end

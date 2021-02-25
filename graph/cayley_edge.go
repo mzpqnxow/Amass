@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/OWASP/Amass/v3/stringset"
+	"github.com/caffix/stringset"
 	"github.com/cayleygraph/cayley"
 	"github.com/cayleygraph/quad"
 )
@@ -44,7 +44,7 @@ func (g *CayleyGraph) InsertEdge(edge *Edge) error {
 	if !g.isBolt || !g.noSync {
 		// Check if this edge has already been inserted
 		p := cayley.StartPath(g.store, quad.IRI(nstr1)).Out(quad.IRI(edge.Predicate)).Is(quad.IRI(nstr2))
-		if first := g.optimizedFirst(p); first != nil {
+		if first, err := p.Iterate(context.Background()).FirstValue(nil); err == nil && first != nil {
 			return nil
 		}
 	}
@@ -116,7 +116,7 @@ func (g *CayleyGraph) ReadInEdges(node Node, predicates ...string) ([]*Edge, err
 	p = p.Has(quad.IRI("type")).Tag("object")
 
 	var edges []*Edge
-	p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
+	err := p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
 		edges = append(edges, &Edge{
 			Predicate: valToStr(m["predicate"]),
 			From:      valToStr(m["object"]),
@@ -124,10 +124,10 @@ func (g *CayleyGraph) ReadInEdges(node Node, predicates ...string) ([]*Edge, err
 		})
 	})
 
-	if len(edges) == 0 {
+	if err == nil && len(edges) == 0 {
 		return nil, fmt.Errorf("%s: ReadInEdges: Failed to discover edges coming into the node %s", g.String(), nstr)
 	}
-	return edges, nil
+	return edges, err
 }
 
 // CountInEdges implements the GraphDatabase interface.
@@ -147,8 +147,9 @@ func (g *CayleyGraph) CountInEdges(node Node, predicates ...string) (int, error)
 		p = p.In(strsToVals(predicates...))
 	}
 	p = p.Has(quad.IRI("type"))
+	count, err := p.Iterate(context.Background()).Count()
 
-	return g.optimizedCount(p), nil
+	return int(count), err
 }
 
 // ReadOutEdges implements the GraphDatabase interface.
@@ -179,7 +180,7 @@ func (g *CayleyGraph) ReadOutEdges(node Node, predicates ...string) ([]*Edge, er
 	p = p.Has(quad.IRI("type")).Tag("object")
 
 	var edges []*Edge
-	p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
+	err := p.Iterate(context.TODO()).TagValues(nil, func(m map[string]quad.Value) {
 		edges = append(edges, &Edge{
 			Predicate: valToStr(m["predicate"]),
 			From:      node,
@@ -187,10 +188,10 @@ func (g *CayleyGraph) ReadOutEdges(node Node, predicates ...string) ([]*Edge, er
 		})
 	})
 
-	if len(edges) == 0 {
+	if err == nil && len(edges) == 0 {
 		return nil, fmt.Errorf("%s: ReadOutEdges: Failed to discover edges leaving the node %s", g.String(), nstr)
 	}
-	return edges, nil
+	return edges, err
 }
 
 // CountOutEdges implements the GraphDatabase interface.
@@ -210,8 +211,9 @@ func (g *CayleyGraph) CountOutEdges(node Node, predicates ...string) (int, error
 		p = p.Out(strsToVals(predicates...))
 	}
 	p = p.Has(quad.IRI("type"))
+	count, err := p.Iterate(context.Background()).Count()
 
-	return g.optimizedCount(p), nil
+	return int(count), err
 }
 
 // DeleteEdge implements the GraphDatabase interface.
@@ -227,7 +229,7 @@ func (g *CayleyGraph) DeleteEdge(edge *Edge) error {
 
 	// Check if the edge exists
 	p := cayley.StartPath(g.store, quad.IRI(from)).Out(quad.IRI(edge.Predicate)).Is(quad.IRI(to))
-	if first := g.optimizedFirst(p); first == nil {
+	if first, err := p.Iterate(context.Background()).FirstValue(nil); err != nil || first == nil {
 		return fmt.Errorf("%s: DeleteEdge: The edge does not exist", g.String())
 	}
 
