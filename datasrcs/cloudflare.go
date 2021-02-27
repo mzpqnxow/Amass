@@ -6,62 +6,66 @@ package datasrcs
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/OWASP/Amass/v3/config"
-	"github.com/OWASP/Amass/v3/eventbus"
 	"github.com/OWASP/Amass/v3/requests"
 	"github.com/OWASP/Amass/v3/systems"
+	"github.com/caffix/eventbus"
+	"github.com/caffix/service"
 	"github.com/cloudflare/cloudflare-go"
 )
 
 // Cloudflare is the Service that handles access to the Cloudflare data source.
 type Cloudflare struct {
-	requests.BaseService
+	service.BaseService
 
-	API        *config.APIKey
 	SourceType string
 	sys        systems.System
+	creds      *config.Credentials
 }
 
 // NewCloudflare returns he object initialized, but not yet started.
 func NewCloudflare(sys systems.System) *Cloudflare {
-	u := &Cloudflare{
+	c := &Cloudflare{
 		SourceType: requests.API,
 		sys:        sys,
 	}
 
-	u.BaseService = *requests.NewBaseService(u, "Cloudflare")
-	return u
+	c.BaseService = *service.NewBaseService(c, "Cloudflare")
+	return c
 }
 
-// Type implements the Service interface.
-func (u *Cloudflare) Type() string {
-	return u.SourceType
+// Description implements the Service interface.
+func (c *Cloudflare) Description() string {
+	return c.SourceType
 }
 
 // OnStart implements the Service interface.
-func (u *Cloudflare) OnStart() error {
-	u.BaseService.OnStart()
+func (c *Cloudflare) OnStart() error {
+	c.creds = c.sys.Config().GetDataSourceConfig(c.String()).GetCredentials()
 
-	u.API = u.sys.Config().GetAPIKey(u.String())
-	if u.API == nil || u.API.Key == "" {
-		u.sys.Config().Log.Printf("%s: API key data was not provided", u.String())
+	if c.creds == nil || c.creds.Key == "" {
+		c.sys.Config().Log.Printf("%s: API key data was not provided", c.String())
 	}
 
-	u.SetRateLimit(500 * time.Millisecond)
+	c.SetRateLimit(2)
 	return nil
 }
 
-// OnDNSRequest implements the Service interface.
-func (u *Cloudflare) OnDNSRequest(ctx context.Context, req *requests.DNSRequest) {
-	cfg := ctx.Value(requests.ContextConfig).(*config.Config)
-	bus := ctx.Value(requests.ContextEventBus).(*eventbus.EventBus)
-	if cfg == nil || bus == nil {
+// OnRequest implements the Service interface.
+func (c *Cloudflare) OnRequest(ctx context.Context, args service.Args) {
+	if req, ok := args.(*requests.DNSRequest); ok {
+		c.dnsRequest(ctx, req)
+	}
+}
+
+func (c *Cloudflare) dnsRequest(ctx context.Context, req *requests.DNSRequest) {
+	cfg, bus, err := ContextConfigBus(ctx)
+	if err != nil {
 		return
 	}
 
-	if u.API == nil || u.API.Key == "" {
+	if c.creds == nil || c.creds.Key == "" {
 		return
 	}
 
@@ -69,25 +73,23 @@ func (u *Cloudflare) OnDNSRequest(ctx context.Context, req *requests.DNSRequest)
 		return
 	}
 
-	u.CheckRateLimit()
-	bus.Publish(requests.SetActiveTopic, eventbus.PriorityCritical, u.String())
 	bus.Publish(requests.LogTopic, eventbus.PriorityHigh,
-		fmt.Sprintf("Querying %s for %s subdomains", u.String(), req.Domain))
+		fmt.Sprintf("Querying %s for %s subdomains", c.String(), req.Domain))
 
-	api, err := cloudflare.NewWithAPIToken(u.API.Key)
+	api, err := cloudflare.NewWithAPIToken(c.creds.Key)
 	if err != nil {
-		bus.Publish(requests.LogTopic, eventbus.PriorityHigh, fmt.Sprintf("%s: %v", u.String(), err))
+		bus.Publish(requests.LogTopic, eventbus.PriorityHigh, fmt.Sprintf("%s: %v", c.String(), err))
 	}
 
 	zones, err := api.ListZones(req.Domain)
 	if err != nil {
-		bus.Publish(requests.LogTopic, eventbus.PriorityHigh, fmt.Sprintf("%s: %v", u.String(), err))
+		bus.Publish(requests.LogTopic, eventbus.PriorityHigh, fmt.Sprintf("%s: %v", c.String(), err))
 	}
 
 	for _, zone := range zones {
 		records, err := api.DNSRecords(zone.ID, cloudflare.DNSRecord{})
 		if err != nil {
-			bus.Publish(requests.LogTopic, eventbus.PriorityHigh, fmt.Sprintf("%s: %v", u.String(), err))
+			bus.Publish(requests.LogTopic, eventbus.PriorityHigh, fmt.Sprintf("%s: %v", c.String(), err))
 		}
 
 		for _, record := range records {
@@ -95,8 +97,8 @@ func (u *Cloudflare) OnDNSRequest(ctx context.Context, req *requests.DNSRequest)
 				bus.Publish(requests.NewNameTopic, eventbus.PriorityHigh, &requests.DNSRequest{
 					Name:   record.Name,
 					Domain: req.Domain,
-					Tag:    u.SourceType,
-					Source: u.String(),
+					Tag:    c.SourceType,
+					Source: c.String(),
 				})
 			}
 			if record.Type == "CNAME" {
@@ -104,8 +106,8 @@ func (u *Cloudflare) OnDNSRequest(ctx context.Context, req *requests.DNSRequest)
 					bus.Publish(requests.NewNameTopic, eventbus.PriorityHigh, &requests.DNSRequest{
 						Name:   record.Content,
 						Domain: req.Domain,
-						Tag:    u.SourceType,
-						Source: u.String(),
+						Tag:    c.SourceType,
+						Source: c.String(),
 					})
 				}
 			}

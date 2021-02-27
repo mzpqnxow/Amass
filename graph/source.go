@@ -7,15 +7,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OWASP/Amass/v3/graphdb"
-	"github.com/OWASP/Amass/v3/stringset"
+	"github.com/caffix/stringset"
 )
 
 var notDataSourceSet = stringset.New("tld", "root", "domain",
 	"cname_record", "ptr_record", "mx_record", "ns_record", "srv_record", "service")
 
 // InsertSource creates a data source node in the graph.
-func (g *Graph) InsertSource(source, tag string) (graphdb.Node, error) {
+func (g *Graph) InsertSource(source, tag string) (Node, error) {
 	node, err := g.InsertNodeIfNotExist(source, "source")
 	if err != nil {
 		return node, err
@@ -25,9 +24,10 @@ func (g *Graph) InsertSource(source, tag string) (graphdb.Node, error) {
 	if p, err := g.db.ReadProperties(node, "tag"); err == nil && len(p) > 0 {
 		if p[0].Value != tag {
 			// Remove an existing 'tag' property
-			g.db.DeleteProperty(node, p[0].Predicate, p[0].Value)
-			// Update the 'tag' property
-			insert = true
+			if err := g.db.DeleteProperty(node, p[0].Predicate, p[0].Value); err == nil {
+				// Update the 'tag' property
+				insert = true
+			}
 		}
 	} else {
 		// The tag was not found
@@ -62,7 +62,7 @@ func (g *Graph) SourceTag(source string) string {
 }
 
 // NodeSources returns the names of data sources that identified the Node parameter during the events.
-func (g *Graph) NodeSources(node graphdb.Node, events ...string) ([]string, error) {
+func (g *Graph) NodeSources(node Node, events ...string) ([]string, error) {
 	nstr := g.db.NodeToID(node)
 	if nstr == "" {
 		return nil, fmt.Errorf("%s: NodeSources: Invalid node reference argument", g.String())
@@ -154,7 +154,9 @@ func (g *Graph) CacheSourceData(source, tag, query, resp string) error {
 	}
 
 	// Remove previously cached responses for the same query
-	g.deleteCachedData(source, query)
+	if err := g.deleteCachedData(source, query); err != nil {
+		return err
+	}
 
 	ts := time.Now().Format(time.RFC3339)
 	rnode, err := g.InsertNodeIfNotExist(source+"-response-"+ts, "response")
@@ -170,7 +172,7 @@ func (g *Graph) CacheSourceData(source, tag, query, resp string) error {
 		return err
 	}
 
-	return g.InsertEdge(&graphdb.Edge{
+	return g.InsertEdge(&Edge{
 		Predicate: query,
 		From:      snode,
 		To:        rnode,
@@ -189,8 +191,12 @@ func (g *Graph) deleteCachedData(source, query string) error {
 	}
 
 	for _, edge := range edges {
-		g.db.DeleteNode(edge.To)
-		g.db.DeleteEdge(edge)
+		if err := g.db.DeleteNode(edge.To); err != nil {
+			return err
+		}
+		if err := g.db.DeleteEdge(edge); err != nil {
+			return err
+		}
 	}
 
 	return nil

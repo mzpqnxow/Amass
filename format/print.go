@@ -6,10 +6,11 @@ package format
 import (
 	"fmt"
 	"io"
+	"net"
 	"strconv"
 	"strings"
 
-	"github.com/OWASP/Amass/v3/net"
+	amassnet "github.com/OWASP/Amass/v3/net"
 	"github.com/OWASP/Amass/v3/requests"
 	"github.com/fatih/color"
 )
@@ -32,7 +33,7 @@ const Banner = `
 
 const (
 	// Version is used to display the current version of Amass.
-	Version = "v3.9.1"
+	Version = "v3.11.5"
 
 	// Author is used to display the Amass Project Team.
 	Author = "OWASP Amass Project - @owaspamass"
@@ -43,12 +44,8 @@ const (
 
 var (
 	// Colors used to ease the reading of program output
-	y      = color.New(color.FgHiYellow)
 	g      = color.New(color.FgHiGreen)
-	r      = color.New(color.FgHiRed)
 	b      = color.New(color.FgHiBlue)
-	fgR    = color.New(color.FgRed)
-	fgY    = color.New(color.FgYellow)
 	yellow = color.New(color.FgHiYellow).SprintFunc()
 	green  = color.New(color.FgHiGreen).SprintFunc()
 	blue   = color.New(color.FgHiBlue).SprintFunc()
@@ -65,7 +62,7 @@ func UpdateSummaryData(output *requests.Output, tags map[string]int, asns map[in
 	tags[output.Tag]++
 
 	for _, addr := range output.Addresses {
-		if addr.Netblock == nil {
+		if addr.CIDRStr == "" {
 			continue
 		}
 
@@ -78,7 +75,7 @@ func UpdateSummaryData(output *requests.Output, tags map[string]int, asns map[in
 			data = asns[addr.ASN]
 		}
 		// Increment how many IPs were in this netblock
-		data.Netblocks[addr.Netblock.String()]++
+		data.Netblocks[addr.CIDRStr]++
 	}
 }
 
@@ -202,7 +199,7 @@ func censorString(input string, start, end int) string {
 // OutputLineParts returns the parts of a line to be printed for a requests.Output.
 func OutputLineParts(out *requests.Output, src, addrs, demo bool) (source, name, ips string) {
 	if src {
-		source = fmt.Sprintf("%-18s", "["+out.Source+"] ")
+		source = fmt.Sprintf("%-18s", "["+out.Sources[0]+"] ")
 	}
 	if addrs {
 		for i, a := range out.Addresses {
@@ -234,12 +231,40 @@ func DesiredAddrTypes(addrs []requests.AddressInfo, ipv4, ipv6 bool) []requests.
 
 	var keep []requests.AddressInfo
 	for _, addr := range addrs {
-		if net.IsIPv4(addr.Address) && !ipv4 {
+		if amassnet.IsIPv4(addr.Address) && !ipv4 {
 			continue
-		} else if net.IsIPv6(addr.Address) && !ipv6 {
+		} else if amassnet.IsIPv6(addr.Address) && !ipv6 {
 			continue
 		}
 		keep = append(keep, addr)
 	}
 	return keep
+}
+
+// InterfaceInfo returns network interface information specific to the current host.
+func InterfaceInfo() string {
+	var output string
+
+	if ifaces, err := net.Interfaces(); err == nil {
+		for _, i := range ifaces {
+			addrs, err := i.Addrs()
+			if err != nil {
+				continue
+			}
+			output += fmt.Sprintf("%s%s%s\n", blue(i.Name+": "), green("flags="), yellow("<"+strings.ToUpper(i.Flags.String()+">")))
+			if i.HardwareAddr.String() != "" {
+				output += fmt.Sprintf("\t%s%s\n", green("ether: "), yellow(i.HardwareAddr.String()))
+			}
+			for _, addr := range addrs {
+				inet := "inet"
+				if a, ok := addr.(*net.IPNet); ok && amassnet.IsIPv6(a.IP) {
+					inet += "6"
+				}
+				inet += ": "
+				output += fmt.Sprintf("\t%s%s\n", green(inet), yellow(addr.String()))
+			}
+		}
+	}
+
+	return output
 }

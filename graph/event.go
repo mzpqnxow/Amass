@@ -4,16 +4,18 @@
 package graph
 
 import (
+	"context"
 	"errors"
 	"time"
 
-	"github.com/OWASP/Amass/v3/graphdb"
-	"github.com/OWASP/Amass/v3/stringset"
+	"github.com/caffix/stringset"
+	"github.com/cayleygraph/cayley"
+	"github.com/cayleygraph/quad"
 	"golang.org/x/net/publicsuffix"
 )
 
 // InsertEvent create an event node in the graph that represents a discovery task.
-func (g *Graph) InsertEvent(eventID string) (graphdb.Node, error) {
+func (g *Graph) InsertEvent(eventID string) (Node, error) {
 	// Check if there is an existing start time for this event.
 	// If not, then create the node and add the start time/date
 	var finish string
@@ -29,8 +31,7 @@ func (g *Graph) InsertEvent(eventID string) (graphdb.Node, error) {
 			return eventNode, err
 		}
 
-		g.db.InsertProperty(eventNode, "start", time.Now().Format(time.RFC3339))
-		if err != nil {
+		if err := g.db.InsertProperty(eventNode, "start", time.Now().Format(time.RFC3339)); err != nil {
 			return eventNode, err
 		}
 	}
@@ -47,15 +48,16 @@ func (g *Graph) InsertEvent(eventID string) (graphdb.Node, error) {
 
 	// Remove an existing 'finish' property and enter a new one every 5 seconds
 	if ok && (curTime.Sub(finishTime) > delta) {
-		g.db.DeleteProperty(eventNode, "finish", finish)
+		if err := g.db.DeleteProperty(eventNode, "finish", finish); err != nil {
+			return eventNode, err
+		}
 	}
 
 	if !ok || (curTime.Sub(finishTime) > delta) {
 		finish = curTime.Format(time.RFC3339)
 
 		// Update the finish property with the current time/date
-		g.db.InsertProperty(eventNode, "finish", finish)
-		if err != nil {
+		if err := g.db.InsertProperty(eventNode, "finish", finish); err != nil {
 			return eventNode, err
 		}
 
@@ -66,7 +68,7 @@ func (g *Graph) InsertEvent(eventID string) (graphdb.Node, error) {
 }
 
 // AddNodeToEvent creates associations between a node in the graph, a data source and a discovery task.
-func (g *Graph) AddNodeToEvent(node graphdb.Node, source, tag, eventID string) error {
+func (g *Graph) AddNodeToEvent(node Node, source, tag, eventID string) error {
 	if source == "" || tag == "" || eventID == "" {
 		return errors.New("Graph: AddNodeToEvent: Invalid arguments provided")
 	}
@@ -81,26 +83,23 @@ func (g *Graph) AddNodeToEvent(node graphdb.Node, source, tag, eventID string) e
 		return err
 	}
 
-	sourceEdge := &graphdb.Edge{
+	if err := g.InsertEdge(&Edge{
 		Predicate: "used",
 		From:      eventNode,
 		To:        sourceNode,
-	}
-	if err := g.InsertEdge(sourceEdge); err != nil {
+	}); err != nil {
 		return err
 	}
 
-	eventEdge := &graphdb.Edge{
+	return g.InsertEdge(&Edge{
 		Predicate: source,
 		From:      eventNode,
 		To:        node,
-	}
-
-	return g.InsertEdge(eventEdge)
+	})
 }
 
 // InEventScope checks if the Node parameter is within scope of the Event identified by the uuid parameter.
-func (g *Graph) InEventScope(node graphdb.Node, uuid string, predicates ...string) bool {
+func (g *Graph) InEventScope(node Node, uuid string, predicates ...string) bool {
 	edges, err := g.db.ReadInEdges(node, predicates...)
 	if err != nil {
 		return false
@@ -113,6 +112,26 @@ func (g *Graph) InEventScope(node graphdb.Node, uuid string, predicates ...strin
 	}
 
 	return false
+}
+
+// EventsInScope returns the events that include all of the domain arguments.
+func (g *Graph) EventsInScope(d ...string) []string {
+	g.db.Lock()
+	defer g.db.Unlock()
+
+	var domains []quad.Value
+	for _, domain := range d {
+		domains = append(domains, quad.IRI(domain))
+	}
+
+	var events []string
+	p := cayley.StartPath(g.db.store).Has(quad.IRI("type"), quad.String("event")).Tag("event")
+	p = p.Out(quad.IRI("domain")).Is(domains...).Back("event").Unique()
+	_ = p.Iterate(context.Background()).EachValue(nil, func(value quad.Value) {
+		events = append(events, valToStr(value))
+	})
+
+	return events
 }
 
 // EventList returns a list of event UUIDs found in the graph.
@@ -132,19 +151,23 @@ func (g *Graph) EventList() []string {
 
 // EventFQDNs returns the domains that were involved in the event.
 func (g *Graph) EventFQDNs(uuid string) []string {
-	names, err := g.AllNodesOfType("fqdn", uuid)
-	if err != nil {
-		return nil
-	}
+	g.db.Lock()
+	defer g.db.Unlock()
 
-	set := stringset.New()
-	for _, name := range names {
-		if n := g.db.NodeToID(name); n != "" {
-			set.Insert(n)
-		}
-	}
+	event := quad.IRI(uuid)
+	root := quad.IRI("root")
+	domain := quad.IRI("domain")
+	ntype := quad.IRI("type")
+	fqdn := quad.String("fqdn")
 
-	return set.Slice()
+	names := stringset.New()
+	p := cayley.StartPath(g.db.store).Has(ntype, fqdn)
+	p = p.Tag("name").Out(root).In(domain).Is(event).Back("name")
+	_ = p.Iterate(context.Background()).EachValue(nil, func(value quad.Value) {
+		names.Insert(valToStr(value))
+	})
+
+	return names.Slice()
 }
 
 // EventDomains returns the domains that were involved in the event.

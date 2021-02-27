@@ -11,25 +11,29 @@ function start()
 end
 
 function vertical(ctx, domain)
-    local resp
-    local hdrs = {['Content-Type']="application/json"}
+    local c
+    local cfg = datasrc_config()
+    if cfg ~= nil then
+        c = cfg.credentials
+    end
 
+    local resp
     -- Check if the response data is in the graph database
-    if (api ~= nil and api.ttl ~= nil and api.ttl > 0) then
-        resp = obtain_response(domain, api.ttl)
+    if (cfg ~= nil and cfg.ttl ~= nil and cfg.ttl > 0) then
+        resp = obtain_response(domain, cfg.ttl)
     end
 
     if (resp == nil or resp == "") then
         local err
-        resp, err = request({
+        resp, err = request(ctx, {
             url=buildurl(domain),
-            headers=hdrs,
+            headers={['Content-Type']="application/json"},
         })
         if (err ~= nil and err ~= "") then
             return
         end
 
-        if (api ~= nil and api.ttl ~= nil and api.ttl > 0) then
+        if (cfg ~= nil and cfg.ttl ~= nil and cfg.ttl > 0) then
             cache_response(domain, resp)
         end
     end
@@ -58,7 +62,11 @@ function sendnames(ctx, content)
         return
     end
 
+    local found = {}
     for i, v in pairs(names) do
-        newname(ctx, v)
+        if found[v] == nil then
+            newname(ctx, v)
+            found[v] = true
+        end
     end
 end
